@@ -94,17 +94,48 @@ st.markdown(
     .status-success { background: #e3efe3; color: #4a6b4a; }
     .status-error   { background: #f5e0e0; color: #8a4a4a; }
     .status-pending { background: #f0eeeb; color: #5a5550; }
-    /* 隐藏默认radio，配合自定义卡片使用 */
-    .mode-radio .stRadio > div[role="radiogroup"] {
-        flex-direction: row;
-        gap: 10px;
+    /* 生成页面 radio 卡片化（输入类型 & 生成模式） */
+    .stRadio > div[role="radiogroup"] {
+        flex-direction: row !important;
+        gap: 10px !important;
     }
-    .mode-radio .stRadio > div[role="radiogroup"] > label {
-        flex: 1;
-        min-width: 0;
+    .stRadio > div[role="radiogroup"] > label {
+        flex: 1 !important;
+        min-width: 0 !important;
+        background: #ffffff !important;
+        border: 2px solid #e8e4df !important;
+        border-radius: 12px !important;
+        padding: 14px 16px !important;
+        text-align: center !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease !important;
+        cursor: pointer !important;
     }
-    .mode-radio .stRadio > div[role="radiogroup"] > label > div:first-child {
-        display: none;
+    .stRadio > div[role="radiogroup"] > label:hover {
+        border-color: #d8d4cf !important;
+        background: #fdfcfa !important;
+    }
+    .stRadio > div[role="radiogroup"] > label[data-checked="true"] {
+        border-color: #c87e5a !important;
+        background: #fdf8f4 !important;
+        color: #c87e5a !important;
+    }
+    /* 隐藏 radio 圆点 */
+    .stRadio > div[role="radiogroup"] > label > div:first-child {
+        display: none !important;
+    }
+    /* 文件上传区域卡片化 */
+    [data-testid="stFileUploaderDropzone"] {
+        border: 2px dashed #d8d4cf !important;
+        border-radius: 14px !important;
+        background: #ffffff !important;
+        padding: 24px !important;
+    }
+    /* 文本输入区域卡片化 */
+    [data-testid="stTextArea"] {
+        border-radius: 12px !important;
+        border: 1px solid #e8e4df !important;
+        overflow: hidden !important;
     }
     </style>
     """,
@@ -325,7 +356,7 @@ with st.container():
         cat_col, tag_col = st.columns([1, 1])
         with cat_col:
             selected_category_name = st.selectbox(
-                "Main Category",
+                "物品分类",
                 category_names,
                 key="auto_category_select",
                 help="上传图片后会自动识别，你也可以手动调整",
@@ -341,7 +372,7 @@ with st.container():
             tags = get_all_tags()
             tag_options = {name: tag for tag, name in tags}
             selected_tag_names = st.multiselect(
-                "Secondary Tags",
+                "二级标签",
                 list(tag_options.keys()),
                 key="auto_tag_select",
                 help="上传图片后会自动识别，你也可以手动调整",
@@ -372,34 +403,14 @@ with st.container():
         )
 
         # 模式选择 + API 推荐 上下排列
-        mode_col1, mode_col2 = st.columns(2)
-        current_mode = st.session_state.get("gen_mode_name", "快速预览")
-        with mode_col1:
-            m_name = "快速预览"
-            is_active = current_mode == m_name
-            label = f"{'✅ ' if is_active else ''}{mode_icons[m_name]} {m_name}\n\n{mode_desc[m_name]}"
-            if st.button(
-                label,
-                key=f"mode_btn_{m_name}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-            ):
-                st.session_state["gen_mode_name"] = m_name
-                st.rerun()
-        with mode_col2:
-            m_name = "精细生成"
-            is_active = current_mode == m_name
-            label = f"{'✅ ' if is_active else ''}{mode_icons[m_name]} {m_name}\n\n{mode_desc[m_name]}"
-            if st.button(
-                label,
-                key=f"mode_btn_{m_name}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-            ):
-                st.session_state["gen_mode_name"] = m_name
-                st.rerun()
-
-        selected_mode_name = st.session_state.get("gen_mode_name", "快速预览")
+        selected_mode_name = st.radio(
+            "生成模式",
+            list(mode_options.keys()),
+            index=0,
+            format_func=lambda x: f"{mode_icons[x]} {x}\n{mode_desc[x]}",
+            label_visibility="collapsed",
+            horizontal=True,
+        )
         selected_mode = mode_options[selected_mode_name]
 
         # 重新计算推荐（根据实际选中的模式）
@@ -463,33 +474,35 @@ with st.expander("🔧 高级参数", expanded=False):
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             sf3d_texture_resolution = st.selectbox(
-                "Texture Resolution",
+                "纹理分辨率",
                 [512, 1024, 2048],
                 index=1,
-                help="Texture map resolution. 1024 is usually a good default.",
+                help="纹理贴图分辨率，1024 通常为较好的默认值。",
             )
         with c2:
             sf3d_foreground_ratio = st.slider(
-                "Foreground Ratio",
+                "前景比例",
                 min_value=0.10,
                 max_value=1.00,
                 value=0.85,
                 step=0.01,
-                help="Lower values add more padding around the object.",
+                help="数值越小，物体周围的留白越多。",
             )
         with c3:
             sf3d_remesh = st.selectbox(
-                "Remesh",
+                "重网格化",
                 ["none", "triangle", "quad"],
                 index=0,
+                help="重建网格拓扑结构的方式。",
             )
         with c4:
             sf3d_vertex_count = st.number_input(
-                "Vertex Count (-1 = no limit)",
+                "顶点数量（-1 = 无限制）",
                 min_value=-1,
                 max_value=20000,
                 value=-1,
                 step=100,
+                help="-1 表示不限制顶点数量。",
             )
         sf3d_generation_options = {
             "texture_resolution": int(sf3d_texture_resolution),
@@ -558,7 +571,7 @@ with st.expander("🔧 高级参数", expanded=False):
         c1, c2, c3 = st.columns(3)
         with c1:
             tripo_model_version = st.selectbox(
-                "Model Version",
+                "模型版本",
                 [
                     "P1-20260311",
                     "Turbo-v1.0-20250506",
@@ -573,67 +586,73 @@ with st.expander("🔧 高级参数", expanded=False):
             )
         with c2:
             tripo_face_limit = st.number_input(
-                "Face Limit (0=自动)",
+                "面数限制（0 = 自动）",
                 min_value=0,
                 max_value=20000,
                 value=0,
                 step=500,
+                help="0 表示由系统自动决定面数。",
             )
         with c3:
             tripo_texture_quality = st.selectbox(
-                "Texture Quality",
+                "纹理质量",
                 ["", "standard", "detailed"],
                 index=0,
+                help="standard 为标准质量，detailed 为高质量纹理。",
             )
 
         tripo_negative_prompt = st.text_input(
-            "Negative Prompt (文本生成可选)",
+            "负面提示词（仅文本生成时有效）",
             value="",
-            help="仅 text_to_model 时生效。",
+            help="描述不希望在生成结果中出现的内容。",
         )
 
         chk1, chk2, chk3, chk4, chk5, chk6, chk7 = st.columns(7)
         with chk1:
-            tripo_texture = st.checkbox("Enable Texture", value=True)
+            tripo_texture = st.checkbox("启用纹理", value=True)
         with chk2:
-            tripo_pbr = st.checkbox("Enable PBR", value=False)
+            tripo_pbr = st.checkbox("启用 PBR", value=False)
         with chk3:
-            tripo_quad = st.checkbox("Enable Quad Mesh", value=False)
+            tripo_quad = st.checkbox("四边形网格", value=False)
         with chk4:
-            tripo_smart_low_poly = st.checkbox("Smart Low Poly", value=False)
+            tripo_smart_low_poly = st.checkbox("智能减面", value=False)
         with chk5:
-            tripo_auto_size = st.checkbox("Auto Size", value=False)
+            tripo_auto_size = st.checkbox("自动尺寸", value=False)
         with chk6:
-            tripo_enable_image_autofix = st.checkbox("Image AutoFix", value=True)
+            tripo_enable_image_autofix = st.checkbox("图片自动修复", value=True)
         with chk7:
-            tripo_generate_parts = st.checkbox("Generate Parts", value=False)
+            tripo_generate_parts = st.checkbox("生成部件", value=False)
 
-        tripo_export_uv = st.checkbox("Export UV", value=True)
+        tripo_export_uv = st.checkbox("导出 UV", value=True)
 
         c4, c5, c6 = st.columns(3)
         with c4:
             tripo_geometry_quality = st.selectbox(
-                "Geometry Quality",
+                "几何质量",
                 ["", "standard", "detailed"],
                 index=0,
+                help="standard 为标准几何质量，detailed 为高质量几何。",
             )
         with c5:
             tripo_texture_alignment = st.selectbox(
-                "Texture Alignment (图生3D)",
+                "纹理对齐（图生3D）",
                 ["", "original_image", "geometry"],
                 index=0,
+                help="original_image 保持原图纹理，geometry 按几何对齐。",
             )
         with c6:
             tripo_orientation = st.selectbox(
-                "Orientation (图生3D)",
+                "朝向（图生3D）",
                 ["", "default", "align_image"],
                 index=0,
+                help="default 为默认朝向，align_image 与图片对齐。",
             )
 
         tripo_compress = st.selectbox(
-            "Compression",
+            "压缩方式",
             ["", "meshopt", "geometry"],
             index=0,
+            help="meshopt 为网格优化压缩，geometry 为几何压缩。",
         )
 
         tripo_generation_options = {

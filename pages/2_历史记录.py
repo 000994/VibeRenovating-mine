@@ -184,6 +184,23 @@ else:
             "failed": "失败",
         }.get(task.status, task.status)
 
+        # 拼装 task-meta 内容，避免条件不满足时产生空行导致 Markdown 解析异常
+        meta_items = [
+            f'<div class="task-meta-item"><strong>分类:</strong> {CATEGORY_NAMES.get(task.category, task.category.value)}</div>',
+            f'<div class="task-meta-item"><strong>模式:</strong> {task.mode.value}</div>',
+            f'<div class="task-meta-item"><strong>API:</strong> {task.provider.value}</div>',
+            f'<div class="task-meta-item"><strong>创建时间:</strong> {task.created_at.strftime("%Y-%m-%d %H:%M")}</div>',
+        ]
+        if task.completed_at:
+            meta_items.append(
+                f'<div class="task-meta-item"><strong>完成时间:</strong> {task.completed_at.strftime("%Y-%m-%d %H:%M")}</div>'
+            )
+        if task.job_id:
+            meta_items.append(
+                f'<div class="task-meta-item"><strong>JobId:</strong> {task.job_id}</div>'
+            )
+        task_meta_html = "\n".join(meta_items)
+
         with st.container():
             st.markdown(
                 f"""
@@ -193,12 +210,7 @@ else:
                         <span class="badge {status_badge_class}">{status_text}</span>
                     </div>
                     <div class="task-meta">
-                        <div class="task-meta-item"><strong>分类:</strong> {CATEGORY_NAMES.get(task.category, task.category.value)}</div>
-                        <div class="task-meta-item"><strong>模式:</strong> {task.mode.value}</div>
-                        <div class="task-meta-item"><strong>API:</strong> {task.provider.value}</div>
-                        <div class="task-meta-item"><strong>创建时间:</strong> {task.created_at.strftime('%Y-%m-%d %H:%M')}</div>
-                        {f'<div class="task-meta-item"><strong>完成时间:</strong> {task.completed_at.strftime("%Y-%m-%d %H:%M")}</div>' if task.completed_at else ''}
-                        {f'<div class="task-meta-item"><strong>JobId:</strong> {task.job_id}</div>' if task.job_id else ''}
+                        {task_meta_html}
                     </div>
                 </div>
                 """,
@@ -227,6 +239,8 @@ else:
                         st.warning(f"无法读取模型文件: {e}")
                 elif task.model_url:
                     st.link_button("⬇️ 下载模型", task.model_url, use_container_width=True)
+                else:
+                    st.empty()
 
             with inner_cols[1]:
                 if local_preview_path:
@@ -246,10 +260,11 @@ else:
                         st.warning(f"无法读取预览文件: {e}")
                 elif task.preview_url:
                     st.link_button("⬇️ 下载预览", task.preview_url, use_container_width=True)
+                else:
+                    st.empty()
 
-            # 混元状态查询
-            if task.status in ["pending", "processing"] and task.provider.value == "hunyuan" and task.job_id:
-                with inner_cols[2]:
+            with inner_cols[2]:
+                if task.status in ["pending", "processing"] and task.provider.value == "hunyuan" and task.job_id:
                     if st.button("🔍 查询状态", key=f"query_{task.task_id}", use_container_width=True):
                         with st.spinner("正在查询..."):
                             try:
@@ -291,6 +306,8 @@ else:
                                         st.rerun()
                             except Exception as e:
                                 st.error(f"查询失败: {e}")
+                else:
+                    st.empty()
 
             with inner_cols[3]:
                 if st.button("🗑️ 删除", key=f"del_{task.task_id}", use_container_width=True):

@@ -61,10 +61,46 @@ class Database:
         self.engine = create_engine(self.db_url, echo=False)
         self.Session = sessionmaker(bind=self.engine)
         self._create_tables()
+        self._sync_env_api_keys()
     
     def _create_tables(self):
         Base.metadata.create_all(self.engine)
-    
+
+    @staticmethod
+    def _is_placeholder_key(key: str) -> bool:
+        """判断 API Key 是否为占位符/示例值，避免自动导入假数据。"""
+        if not key:
+            return True
+        key_lower = key.lower()
+        placeholders = [
+            "your_", "xxx", "xxxx", "example", "placeholder", "demo",
+            "test", "fake", "mock", "dummy", "changeme", "password",
+            "sk-test", "sk-dummy", "akidtest", "secretkeytest",
+        ]
+        return any(p in key_lower for p in placeholders)
+
+    def _sync_env_api_keys(self):
+        """如果数据库中还没有某服务商的 API Key，则尝试从 .env / settings 自动导入。"""
+        from config import APIProvider
+
+        mappings = [
+            (APIProvider.SF3D.value, settings.sf3d_api_key, None),
+            (APIProvider.MESHY.value, settings.meshy_api_key, None),
+            (APIProvider.RODIN.value, settings.rodin_api_key, None),
+            (APIProvider.HUNYUAN.value, settings.hunyuan_api_key, settings.hunyuan_secret_key),
+            (APIProvider.TRIPO.value, settings.tripo_api_key, None),
+        ]
+
+        for provider, api_key, secret_key in mappings:
+            if api_key and not self._is_placeholder_key(api_key):
+                existing = self.get_api_key(provider)
+                if not existing:
+                    self.save_api_key(provider, api_key, secret_key)
+                else:
+                    # 如果数据库中已存在占位符，用真实值替换
+                    if self._is_placeholder_key(existing.get("api_key", "")):
+                        self.save_api_key(provider, api_key, secret_key)
+
     def get_session(self):
         return self.Session()
     
@@ -200,6 +236,8 @@ class Database:
         try:
             record = session.query(UserAPIKey).filter_by(provider=provider).first()
             if record:
+                if self._is_placeholder_key(record.api_key):
+                    return None
                 return {
                     "api_key": record.api_key,
                     "secret_key": record.secret_key,
@@ -212,7 +250,11 @@ class Database:
         session = self.get_session()
         try:
             records = session.query(UserAPIKey).all()
-            return {r.provider: {"api_key": r.api_key, "secret_key": r.secret_key} for r in records}
+            result = {}
+            for r in records:
+                if not self._is_placeholder_key(r.api_key):
+                    result[r.provider] = {"api_key": r.api_key, "secret_key": r.secret_key}
+            return result
         finally:
             session.close()
 
